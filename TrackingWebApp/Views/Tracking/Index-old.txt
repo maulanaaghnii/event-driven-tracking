@@ -1,6 +1,9 @@
-﻿@{
-    ViewData["Title"] = "Home Page";
+﻿@page
+@model IndexModel
+@{
+    ViewData["Title"] = "Tracker GPS";
 }
+
 <!DOCTYPE html>
 <html>
 <head>
@@ -352,227 +355,6 @@
       let popupUnit = null;
       const markerStates = {}; // Untuk menyimpan state animasi tiap marker
       let unitList = []; // Tambahkan ini untuk menyimpan list unit
-      let wsConnection = null;
-
-      // Debounce function
-      function debounce(func, wait) {
-        let timeout;
-        return function executedFunction(...args) {
-          const later = () => {
-            clearTimeout(timeout);
-            func(...args);
-          };
-          clearTimeout(timeout);
-          timeout = setTimeout(later, wait);
-        };
-      }
-
-      // Throttle function
-      function throttle(func, limit) {
-        let inThrottle;
-        return function executedFunction(...args) {
-          if (!inThrottle) {
-            func(...args);
-            inThrottle = true;
-            setTimeout(() => inThrottle = false, limit);
-          }
-        };
-      }
-
-      // Optimized marker visibility update
-      const updateMarkerVisibility = throttle(() => {
-        const features = map.querySourceFeatures('moving-markers', {
-          sourceLayer: undefined,
-          filter: ['!', ['has', 'point_count']]
-        });
-        const visibleUnits = new Set(features.map(f => f.properties.unitno));
-        Object.keys(markers).forEach(unitno => {
-          if (visibleUnits.has(unitno)) {
-            markers[unitno].setOpacity(1);
-          } else {
-            markers[unitno].setOpacity(0);
-          }
-        });
-      }, 100);
-
-      // Optimized search input handler
-      const handleSearchInput = debounce((e) => {
-        updateUnitList(e.target.value);
-      }, 300);
-
-      function updateUnitList(filter = '') {
-        const unitListElement = document.getElementById('unit-list');
-        const units = Object.keys(latestGpsData).length > 0 ? 
-          Object.keys(latestGpsData) : 
-          unitList;
-          
-        unitListElement.innerHTML = '';
-        
-        const filteredUnits = units.filter(unit => 
-          unit.toLowerCase().includes(filter.toLowerCase())
-        );
-        
-        if (filteredUnits.length > 0) {
-          filteredUnits.forEach(unit => {
-            const div = document.createElement('div');
-            div.className = 'unit-item';
-            
-            // Status indicator
-            const status = document.createElement('span');
-            status.className = 'unit-status';
-            
-            // Cek status dari latestGpsData jika ada
-            const data = latestGpsData[unit];
-            if (data) {
-              if (data.status === 'on' || data.status === true) {
-                status.style.background = '#43a047';
-              } else if (data.status === 'off' || data.status === false) {
-                status.style.background = '#e53935';
-              } else {
-                status.style.background = '#43a047';
-              }
-            } else {
-              status.style.background = '#fbc02d'; // Default kuning jika belum ada data
-            }
-            
-            div.appendChild(status);
-            div.appendChild(document.createTextNode(unit));
-            
-            // Add hover effect
-            div.onmouseenter = () => div.classList.add('active');
-            div.onmouseleave = () => div.classList.remove('active');
-            
-            div.onclick = () => {
-              const marker = markers[unit];
-              if (marker) {
-                const coord = marker.getLngLat();
-                map.flyTo({
-                  center: [coord.lng, coord.lat],
-                  zoom: Math.max(map.getZoom(), 18),
-                  duration: 2000
-                });
-                popupUnit = unit;
-                showPopup(coord.lng, coord.lat, unit);
-                unitListElement.classList.remove('show');
-                document.getElementById('unit-search').value = '';
-              }
-            };
-            
-            unitListElement.appendChild(div);
-          });
-          unitListElement.classList.add('show');
-        } else {
-          // Show "No units found" message
-          const emptyDiv = document.createElement('div');
-          emptyDiv.className = 'unit-item';
-          emptyDiv.style.color = '#90caf9';
-          emptyDiv.textContent = 'No units found';
-          unitListElement.appendChild(emptyDiv);
-          unitListElement.classList.add('show');
-        }
-      }
-
-      // Tambahkan fungsi untuk search
-      function setupSearch() {
-        const searchInput = document.getElementById('unit-search');
-        const unitListElement = document.getElementById('unit-list');
-        const searchContainer = document.querySelector('.search-container');
-        const searchToggle = document.getElementById('search-toggle');
-        
-        // Toggle search visibility
-        searchToggle.onclick = () => {
-          searchContainer.classList.toggle('hidden');
-          const chevron = document.getElementById('chevron-toggle');
-          if (chevron) {
-            if (searchContainer.classList.contains('hidden')) {
-              chevron.style.transform = 'rotate(180deg)';
-              chevron.style.fill = '#1976d2';
-            } else {
-              chevron.style.transform = 'rotate(0deg)';
-              chevron.style.fill = '#90caf9';
-            }
-          }
-        };
-        
-        // Event listeners
-        searchInput.addEventListener('focus', () => {
-          updateUnitList('');
-        });
-        
-        searchInput.addEventListener('input', handleSearchInput);
-        
-        // Close dropdown when clicking outside
-        document.addEventListener('click', (e) => {
-          if (!searchInput.contains(e.target) && !unitListElement.contains(e.target)) {
-            unitListElement.classList.remove('show');
-          }
-        });
-      }
-
-      function connectWebSocket() {
-        wsConnection = new WebSocket('ws://localhost:5000/gpsHub');
-        
-        wsConnection.onopen = function() {
-          console.log('WebSocket connection established');
-        };
-        
-        wsConnection.onmessage = function(event) {
-          const dataArray = JSON.parse(event.data);
-          
-          dataArray.forEach(data => {
-            if (data.UnitNo && data.Lat !== undefined && data.Lon !== undefined) {
-              const lat = parseFloat(data.Lat);
-              const lng = parseFloat(data.Lon);
-
-              // Validasi lat/lon
-              if (isNaN(lat) || isNaN(lng) || lat < -90 || lat > 90 || lng < -180 || lng > 180) {
-                console.warn(`Skip unit ${data.UnitNo} karena lat/lon tidak valid:`, lat, lng);
-                return; // skip unit ini
-              }
-
-              // Tambahkan unit ke list jika belum ada
-              if (!unitList.includes(data.UnitNo)) {
-                unitList.push(data.UnitNo);
-                updateTotalUnitInfo();
-              }
-
-              updateMarker(
-                data.UnitNo,
-                lat,
-                lng,
-                data.GeoMaxSpeed,
-                data.VehicleSpeed,
-                data.DeviceId,
-                data.Status
-              );
-              latestGpsData[data.UnitNo] = {
-                lat: data.Lat,
-                lng: data.Lon,
-                geomaxspeed: data.GeoMaxSpeed,
-                vehiclespeed: data.VehicleSpeed,
-                deviceid: data.DeviceId,
-                status: data.Status
-              };
-              
-              // Update popup if this is the currently selected unit
-              if (popupUnit === data.UnitNo) {
-                showPopup(data.Lon, data.Lat, data.UnitNo);
-              }
-            }
-          });
-        };
-        
-        wsConnection.onerror = function(error) {
-          console.error('WebSocket error:', error);
-        };
-        
-        wsConnection.onclose = function() {
-          console.log('WebSocket connection closed');
-          // Coba reconnect setelah 5 detik
-          setTimeout(connectWebSocket, 5000);
-        };
-      }
-
       function createMarkerElement(unitno, vehiclespeed) {
         const container = document.createElement('div');
         container.className = 'marker-container';
@@ -808,122 +590,65 @@
         }
       });
       @* let unitList = ['DT3894']; *@
-      // Initialize WebSocket connection after map loads
-      map.on('load', () => {
-        setupSearch();
-        connectWebSocket();
-        updateTotalUnitInfo();
-
-        // Load GeoJSON dengan fetch
-        fetch('/api/geojson')
-          .then(response => {
-            if (!response.ok) {
-              throw new Error(`HTTP error! status: ${response.status}`);
-            }
-            return response.json();
-          })
-          .then(data => {
-            console.log('GeoJSON loaded successfully:', data); // Debug log
-            map.addSource('geojson-source', {
-              type: 'geojson',
-              data: data
-            });
-
-            // Tambahkan layer dengan styling yang lebih baik
-            map.addLayer({
-              id: 'geojson-layer',
-              type: 'fill',
-              source: 'geojson-source',
-              paint: {
-                'fill-color': '#1976d2',
-                'fill-opacity': 0.3,
-                'fill-outline-color': '#1976d2'
-              }
-            });
-
-            // Tambahkan hover effect
-            map.on('mouseenter', 'geojson-layer', () => {
-              map.getCanvas().style.cursor = 'pointer';
-            });
-
-            map.on('mouseleave', 'geojson-layer', () => {
-              map.getCanvas().style.cursor = '';
-            });
-
-            // Tambahkan click event
-            map.on('click', 'geojson-layer', (e) => {
-              const coordinates = e.lngLat;
-              const properties = e.features[0].properties;
-              
-              // Tampilkan popup dengan informasi area
-              new maplibregl.Popup()
-                .setLngLat(coordinates)
-                .setHTML(`
-                  <h6>Area Information</h6>
-                  <h3>${properties.name || 'Unnamed Area'}</h3>
-                  <p style="margin-top: 8px; color: #666;">${properties.description || 'No description available'}</p>
-                `)
-                .addTo(map);
-            });
-          })
-          .catch(error => {
-            console.error('Error loading GeoJSON:', error);
-          });
-      });
-
-      // Cleanup on page unload
-      window.addEventListener('unload', () => {
-        if (wsConnection) {
-          wsConnection.close();
-        }
-        Object.values(markers).forEach(marker => marker.remove());
-      });
-
-      function updateTotalUnitInfo() {
-        const total = unitList.length;
-        // Hitung unit aktif dan tidak aktif berdasarkan latestGpsData
-        let aktif = 0;
-        let tidakAktif = 0;
-        unitList.forEach(unit => {
-          const data = latestGpsData[unit];
-          if (data) {
-            if (data.status === 'on' || data.status === true) {
-              aktif++;
-            } else if (data.status === 'off' || data.status === false) {
-              tidakAktif++;
-            }
-          }
+      fetch('/units.json')
+        .then(res => res.json())
+        .then(units => {
+          unitList = units;
+          updateTotalUnitInfo();
+          fetchAllUnits();
+          setInterval(fetchAllUnits, 2000);
+        })
+        .catch(err => {
+          console.error('Gagal load units.json:', err);
         });
-        document.getElementById('total-unit-info').innerHTML = `Total Unit: ${total}<br>Active: ${aktif}<br>Inactive: ${tidakAktif}`;
+
+      function fetchAllUnits() {
+        unitList.forEach(unitno => {
+          fetch(`/api/gps/${unitno}`)
+            .then(response => {
+              if (!response.ok) throw new Error('404 or server error');
+              return response.json();
+            })
+            .then(data => {
+              if (data.unitno && data.gpslat && data.gpslong) {
+                const lat = parseFloat(data.gpslat);
+                const lng = parseFloat(data.gpslong);
+
+                // Validasi lat/lon
+                if (isNaN(lat) || isNaN(lng) || lat < -90 || lat > 90 || lng < -180 || lng > 180) {
+                  console.warn(`Skip unit ${data.unitno} karena lat/lon tidak valid:`, lat, lng);
+                  return; // skip unit ini
+                }
+
+                updateMarker(
+                  data.unitno,
+                  lat,
+                  lng,
+                  data.geomaxspeed,
+                  data.vehiclespeed,
+                  data.deviceid,
+                  data.status
+                );
+                latestGpsData[data.unitno] = {
+                  lat: data.gpslat,
+                  lng: data.gpslong,
+                  geomaxspeed: data.geomaxspeed,
+                  vehiclespeed: data.vehiclespeed,
+                  deviceid: data.deviceid,
+                  status: data.status
+                };
+                
+                // Update popup if this is the currently selected unit
+                if (popupUnit === data.unitno) {
+                  showPopup(data.gpslong, data.gpslat, data.unitno);
+                }
+              }
+            })
+            .catch(err => {
+              console.error(`Gagal ambil data unit ${unitno}:`, err);
+            });
+        });
       }
-
-      // Tambahkan event click pada map untuk menutup popup
-      map.on('click', (e) => {
-        // Jika klik bukan pada marker, tutup popup
-        if (!e.originalEvent.target.closest('.marker-container')) {
-          document.getElementById('popup-info').style.display = 'none';
-          popupUnit = null;
-        }
-      });
-
-      // Tambahkan event listener untuk checkbox geofencing
-      const geofenceToggle = document.getElementById('geofence-toggle');
-      geofenceToggle.addEventListener('change', function() {
-        const isGeofenceEnabled = this.checked;
-        
-        // Toggle visibility layer geofence
-        if (map.getLayer('geojson-layer')) {
-          map.setLayoutProperty('geojson-layer', 'visibility', isGeofenceEnabled ? 'visible' : 'none');
-        }
-      });
-
-      // Tambahkan event listener untuk toggle button
-      const toggleButton = document.getElementById('toggle-button');
-      const toggleContainer = document.querySelector('.toggle-container');
-      
-      toggleButton.addEventListener('click', function() {
-        toggleContainer.classList.toggle('hidden');
-      });
 
       // Fungsi untuk menampilkan popup info
       function showPopup(lng, lat, unitno) {
@@ -1197,6 +922,322 @@
 
         map.on('zoom', updateMarkerVisibility);
       });
+
+      // Debounce function
+      function debounce(func, wait) {
+        let timeout;
+        return function executedFunction(...args) {
+          const later = () => {
+            clearTimeout(timeout);
+            func(...args);
+          };
+          clearTimeout(timeout);
+          timeout = setTimeout(later, wait);
+        };
+      }
+
+      // Throttle function
+      function throttle(func, limit) {
+        let inThrottle;
+        return function executedFunction(...args) {
+          if (!inThrottle) {
+            func(...args);
+            inThrottle = true;
+            setTimeout(() => inThrottle = false, limit);
+          }
+        };
+      }
+
+      // Optimized marker visibility update
+      const updateMarkerVisibility = throttle(() => {
+        const features = map.querySourceFeatures('moving-markers', {
+          sourceLayer: undefined,
+          filter: ['!', ['has', 'point_count']]
+        });
+        const visibleUnits = new Set(features.map(f => f.properties.unitno));
+        Object.keys(markers).forEach(unitno => {
+          if (visibleUnits.has(unitno)) {
+            markers[unitno].setOpacity(1);
+          } else {
+            markers[unitno].setOpacity(0);
+          }
+        });
+      }, 100);
+
+      // Optimized search input handler
+      const handleSearchInput = debounce((e) => {
+        updateUnitList(e.target.value);
+      }, 300);
+
+      // Tambahkan fungsi untuk search
+      function setupSearch() {
+        const searchInput = document.getElementById('unit-search');
+        const unitListElement = document.getElementById('unit-list');
+        const searchContainer = document.querySelector('.search-container');
+        const searchToggle = document.getElementById('search-toggle');
+        
+        // Toggle search visibility
+        searchToggle.onclick = () => {
+          searchContainer.classList.toggle('hidden');
+          const chevron = document.getElementById('chevron-toggle');
+          if (chevron) {
+          if (searchContainer.classList.contains('hidden')) {
+            chevron.style.transform = 'rotate(180deg)';
+            chevron.style.fill = '#1976d2';
+          } else {
+            chevron.style.transform = 'rotate(0deg)';
+            chevron.style.fill = '#90caf9';
+          }
+          }
+        };
+        
+        function updateUnitList(filter = '') {
+          const units = Object.keys(latestGpsData).length > 0 ? 
+            Object.keys(latestGpsData) : 
+            unitList;
+            
+          unitListElement.innerHTML = '';
+          
+          const filteredUnits = units.filter(unit => 
+            unit.toLowerCase().includes(filter.toLowerCase())
+          );
+          
+          if (filteredUnits.length > 0) {
+            filteredUnits.forEach(unit => {
+              const div = document.createElement('div');
+              div.className = 'unit-item';
+              
+              // Status indicator
+              const status = document.createElement('span');
+              status.className = 'unit-status';
+              
+              // Cek status dari latestGpsData jika ada
+              const data = latestGpsData[unit];
+              if (data) {
+                if (data.status === 'on' || data.status === true) {
+                  status.style.background = '#43a047';
+                } else if (data.status === 'off' || data.status === false) {
+                  status.style.background = '#e53935';
+                } else {
+                  status.style.background = '#43a047';
+                }
+              } else {
+                status.style.background = '#fbc02d'; // Default kuning jika belum ada data
+              }
+              
+              div.appendChild(status);
+              div.appendChild(document.createTextNode(unit));
+              
+              // Add hover effect
+              div.onmouseenter = () => div.classList.add('active');
+              div.onmouseleave = () => div.classList.remove('active');
+              
+              div.onclick = () => {
+                const marker = markers[unit];
+                if (marker) {
+                  const coord = marker.getLngLat();
+                  map.flyTo({
+                    center: [coord.lng, coord.lat],
+                    zoom: Math.max(map.getZoom(), 18),
+                    duration: 2000
+                  });
+                  popupUnit = unit;
+                  showPopup(coord.lng, coord.lat, unit);
+                  unitListElement.classList.remove('show');
+                  searchInput.value = '';
+                }
+              };
+              
+              unitListElement.appendChild(div);
+            });
+            unitListElement.classList.add('show');
+          } else {
+            // Show "No units found" message
+            const emptyDiv = document.createElement('div');
+            emptyDiv.className = 'unit-item';
+            emptyDiv.style.color = '#90caf9';
+            emptyDiv.textContent = 'No units found';
+            unitListElement.appendChild(emptyDiv);
+            unitListElement.classList.add('show');
+          }
+        }
+        
+        // Event listeners
+        searchInput.addEventListener('focus', () => {
+          updateUnitList('');
+        });
+        
+        searchInput.addEventListener('input', handleSearchInput);
+        
+        // Close dropdown when clicking outside
+        document.addEventListener('click', (e) => {
+          if (!searchInput.contains(e.target) && !unitListElement.contains(e.target)) {
+            unitListElement.classList.remove('show');
+          }
+        });
+      }
+      
+      // Initialize search after map loads
+      map.on('load', () => {
+        setupSearch();
+        // Initial fetch of units
+        fetch('/units.json')
+          .then(res => res.json())
+          .then(units => {
+            unitList = units;
+            updateTotalUnitInfo();
+            fetchAllUnits();
+            setInterval(fetchAllUnits, 2000);
+          })
+          .catch(err => {
+            console.error('Gagal load units.json:', err);
+          });
+
+        // Load GeoJSON dengan fetch
+        fetch('/api/geojson')
+          .then(response => {
+            if (!response.ok) {
+              throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            return response.json();
+          })
+          .then(data => {
+            console.log('GeoJSON loaded successfully:', data); // Debug log
+            map.addSource('geojson-source', {
+              type: 'geojson',
+              data: data
+            });
+
+            // Tambahkan layer dengan styling yang lebih baik
+            map.addLayer({
+              id: 'geojson-layer',
+              type: 'fill',
+              source: 'geojson-source',
+              paint: {
+                'fill-color': '#1976d2',
+                'fill-opacity': 0.3,
+                'fill-outline-color': '#1976d2'
+              }
+            });
+
+            // Tambahkan hover effect
+            map.on('mouseenter', 'geojson-layer', () => {
+              map.getCanvas().style.cursor = 'pointer';
+            });
+
+            map.on('mouseleave', 'geojson-layer', () => {
+              map.getCanvas().style.cursor = '';
+            });
+
+            // Tambahkan click event
+            map.on('click', 'geojson-layer', (e) => {
+              const coordinates = e.lngLat;
+              const properties = e.features[0].properties;
+              
+              // Tampilkan popup dengan informasi area
+              new maplibregl.Popup()
+                .setLngLat(coordinates)
+                .setHTML(`
+                  <h6>Area Information</h6>
+                  <h3>${properties.name || 'Unnamed Area'}</h3>
+                  <p style="margin-top: 8px; color: #666;">${properties.description || 'No description available'}</p>
+                `)
+                .addTo(map);
+            });
+          })
+          .catch(error => {
+            console.error('Error loading GeoJSON:', error);
+          });
+      });
+
+      // Memory management for markers
+      const markerCleanup = new WeakMap();
+      
+      function cleanupUnusedMarkers() {
+        const currentUnits = new Set(unitList);
+        Object.keys(markers).forEach(unitno => {
+          if (!currentUnits.has(unitno)) {
+            markers[unitno].remove();
+            delete markers[unitno];
+            delete markerStates[unitno];
+            delete latestGpsData[unitno];
+          }
+        });
+      }
+
+      // Update fetch interval based on number of units
+      function getOptimalFetchInterval() {
+        const unitCount = unitList.length;
+        if (unitCount > 50) return 5000; // 5 seconds for many units
+        if (unitCount > 20) return 3000; // 3 seconds for medium units
+        return 2000; // 2 seconds for few units
+      }
+
+      // Update fetch interval periodically
+      setInterval(() => {
+        const newInterval = getOptimalFetchInterval();
+        if (newInterval !== currentFetchInterval) {
+          clearInterval(fetchInterval);
+          currentFetchInterval = newInterval;
+          fetchInterval = setInterval(fetchAllUnits, currentFetchInterval);
+        }
+      }, 60000); // Check every minute
+
+      let currentFetchInterval = 2000;
+      let fetchInterval = setInterval(fetchAllUnits, currentFetchInterval);
+
+      // Cleanup on page unload
+      window.addEventListener('unload', () => {
+        clearInterval(fetchInterval);
+        Object.values(markers).forEach(marker => marker.remove());
+      });
+
+      function updateTotalUnitInfo() {
+        const total = unitList.length;
+        // Hitung unit aktif dan tidak aktif berdasarkan latestGpsData
+        let aktif = 0;
+        let tidakAktif = 0;
+        unitList.forEach(unit => {
+          const data = latestGpsData[unit];
+          if (data) {
+            if (data.status === 'on' || data.status === true) {
+              aktif++;
+            } else if (data.status === 'off' || data.status === false) {
+              tidakAktif++;
+            }
+          }
+        });
+        document.getElementById('total-unit-info').innerHTML = `Total Unit: ${total}<br>Active: ${aktif}<br>Inactive: ${tidakAktif}`;
+      }
+
+      // Tambahkan event click pada map untuk menutup popup
+      map.on('click', (e) => {
+        // Jika klik bukan pada marker, tutup popup
+        if (!e.originalEvent.target.closest('.marker-container')) {
+          document.getElementById('popup-info').style.display = 'none';
+          popupUnit = null;
+        }
+      });
+
+      // Tambahkan event listener untuk checkbox geofencing
+      const geofenceToggle = document.getElementById('geofence-toggle');
+      geofenceToggle.addEventListener('change', function() {
+        const isGeofenceEnabled = this.checked;
+        
+        // Toggle visibility layer geofence
+        if (map.getLayer('geojson-layer')) {
+          map.setLayoutProperty('geojson-layer', 'visibility', isGeofenceEnabled ? 'visible' : 'none');
+        }
+      });
+
+      // Tambahkan event listener untuk toggle button
+      const toggleButton = document.getElementById('toggle-button');
+      const toggleContainer = document.querySelector('.toggle-container');
+      
+      toggleButton.addEventListener('click', function() {
+        toggleContainer.classList.toggle('hidden');
+      });
+
     </script>
 </body>
 </html>
