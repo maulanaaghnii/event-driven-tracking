@@ -711,11 +711,24 @@
           markerStates[unitno] = { current: [lng, lat], target: [lng, lat], animating: false };
         } else {
           const state = markerStates[unitno] || { current: [lng, lat], target: [lng, lat], animating: false };
-          state.target = [lng, lat];
-          if (!state.animating) {
+          
+          // Jika marker sedang bergerak, update target dengan interpolasi yang lebih halus
+          if (state.animating) {
+            const [currentLng, currentLat] = state.current;
+            const [targetLng, targetLat] = state.target;
+            
+            // Interpolasi yang lebih halus untuk target baru
+            const newLng = currentLng + (targetLng - currentLng) * 0.2;
+            const newLat = currentLat + (targetLat - currentLat) * 0.2;
+            
+            state.target = [newLng, newLat];
+          } else {
+            state.target = [lng, lat];
             animateMarker(unitno, state);
           }
+          
           markerStates[unitno] = state;
+          
           // Update icon jika vehiclespeed berubah
           const markerContainer = markers[unitno].getElement();
           let iconUrl = '/icon-normal.svg';
@@ -742,31 +755,6 @@
           }
         }
         updateMarkerVisibility();
-      }
-      // Fungsi animasi smooth
-      function animateMarker(unitno, state) {
-        state.animating = true;
-        const marker = markers[unitno];
-        const [startLng, startLat] = state.current;
-        const [endLng, endLat] = state.target;
-        const duration = 800; // Reduced from 1200ms to 800ms
-        const startTime = performance.now();
-
-        function step(now) {
-          const t = Math.min((now - startTime) / duration, 1);
-          // Easing cubic
-          const ease = t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
-          const lng = startLng + (endLng - startLng) * ease;
-          const lat = startLat + (endLat - startLat) * ease;
-          marker.setLngLat([lng, lat]);
-          if (t < 1) {
-            requestAnimationFrame(step);
-          } else {
-            state.current = [endLng, endLat];
-            state.animating = false;
-          }
-        }
-        requestAnimationFrame(step);
       }
       const map = new maplibregl.Map({
         container: 'map',
@@ -1197,6 +1185,70 @@
 
         map.on('zoom', updateMarkerVisibility);
       });
+
+      // Fungsi animasi smooth tanpa rotasi
+      function animateMarker(unitno, state) {
+        state.animating = true;
+        const marker = markers[unitno];
+        const [startLng, startLat] = state.current;
+        const [endLng, endLat] = state.target;
+        
+        // Hitung jarak untuk menentukan durasi
+        const distance = Math.sqrt(
+          Math.pow(endLng - startLng, 2) + 
+          Math.pow(endLat - startLat, 2)
+        );
+        
+        // Durasi berdasarkan jarak dan kecepatan
+        const baseDuration = 2000; // Durasi dasar 2 detik
+        const speedFactor = 0.3; // Faktor kecepatan yang lebih lambat
+        const duration = Math.min(Math.max(distance * baseDuration * speedFactor, 1000), 4000);
+        
+        const startTime = performance.now();
+        let lastFrameTime = startTime;
+        let lastPosition = { lng: startLng, lat: startLat };
+
+        function easeInOutQuad(t) {
+          return t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+        }
+
+        function interpolatePosition(start, end, progress) {
+          return {
+            lng: start.lng + (end.lng - start.lng) * progress,
+            lat: start.lat + (end.lat - start.lat) * progress
+          };
+        }
+
+        function step(now) {
+          const elapsed = now - startTime;
+          const deltaTime = now - lastFrameTime;
+          lastFrameTime = now;
+          
+          const t = Math.min(elapsed / duration, 1);
+          const ease = easeInOutQuad(t);
+          
+          // Interpolasi posisi dengan easing
+          const currentPosition = interpolatePosition(
+            { lng: startLng, lat: startLat },
+            { lng: endLng, lat: endLat },
+            ease
+          );
+          
+          // Update posisi marker
+          marker.setLngLat([currentPosition.lng, currentPosition.lat]);
+          
+          lastPosition = currentPosition;
+          
+          if (t < 1) {
+            requestAnimationFrame(step);
+          } else {
+            state.current = [endLng, endLat];
+            state.animating = false;
+          }
+        }
+        
+        requestAnimationFrame(step);
+      }
     </script>
 </body>
 </html>
