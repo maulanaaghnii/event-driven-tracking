@@ -23,13 +23,14 @@
         cursor: pointer;
         transition: transform 0.3s ease-out;
         filter: drop-shadow(0 0 5px rgba(0,0,0,0.5));
+        position: relative;
       }
       .moving-marker:hover {
         transform: scale(1.2);
       }
       .marker-label {
         position: absolute;
-        bottom: -20px;
+        top: -85px;
         left: 50%;
         transform: translateX(-50%);
         background-color: rgba(0, 0, 0, 0.7);
@@ -38,6 +39,22 @@
         border-radius: 4px;
         font-size: 12px;
         white-space: nowrap;
+        pointer-events: none;
+        z-index: 1;
+      }
+      .marker-line {
+        position: absolute;
+        top: -85px;
+        left: 50%;
+        width: 4px;
+        height: 100px;
+        background: linear-gradient(to bottom, 
+          rgb(0, 0, 0) 0%,
+          rgb(0, 0, 0) 40%,
+          rgb(0, 0, 0) 40%,
+          rgb(0, 0, 0) 100%
+        );
+        transform: translateX(-50%);
         pointer-events: none;
       }
       .search-container {
@@ -320,7 +337,7 @@
     <div id="total-unit-info"></div>
     <div class="toggle-container hidden">
       <div class="toggle-item">
-        <input type="checkbox" id="cluster-toggle" checked>
+        <input type="checkbox" id="cluster-toggle">
         <label for="cluster-toggle">Show Clusters</label>
       </div>
       <div class="toggle-item">
@@ -605,8 +622,12 @@
         const label = document.createElement('div');
         label.className = 'marker-label';
         label.textContent = unitno;
+
+        const line = document.createElement('div');
+        line.className = 'marker-line';
         
         container.appendChild(markerElement);
+        container.appendChild(line);
         container.appendChild(label);
         container.dataset.unitno = unitno;
         container.statusCircle = statusCircle;
@@ -1014,7 +1035,7 @@
             type: 'FeatureCollection',
             features: []
           },
-          cluster: true,
+          cluster: false,
           clusterMaxZoom: 16,
           clusterRadius: 100
         });
