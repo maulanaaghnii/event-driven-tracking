@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Realtime GPS</title>
+    <script src="https://cdn.jsdelivr.net/npm/@microsoft/signalr@latest/dist/browser/signalr.min.js"></script>
+</head>
+<body>
+    <h1>Data GPS Realtime</h1>
+    <ul id="gpsList"></ul>
+
+    <script>
+        const connection = new signalR.HubConnectionBuilder()
+            .withUrl("/gpsHub")
+            .build();
+
+        connection.on("ReceiveGps", function (dataJson) {
+            const data = JSON.parse(dataJson);
+            const list = document.getElementById("gpsList");
+            list.innerHTML = "";
+
+            data.forEach(unit => {
+                const li = document.createElement("li");
+                li.innerText = `Unit ${unit.UnitNo}: ${unit.Lat}, ${unit.Lon}`;
+                list.appendChild(li);
+            });
+        });
+
+        connection.start()
+            .then(() => console.log("Connected to SignalR"))
+            .catch(err => console.error("SignalR error:", err));
+    </script>
+</body>
+</html>

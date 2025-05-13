@@ -1,0 +1,1146 @@
+﻿@{
+    ViewData["Title"] = "Home Page";
+}
+
+
+@section Styles {
+    <link href="https://unpkg.com/maplibre-gl@latest/dist/maplibre-gl.css" rel="stylesheet" />
+    <style>
+      body { margin: 0; overflow: hidden; }
+      #map { position: absolute; top: 0; bottom: 0; width: 100%; }
+      .moving-marker {
+        width: 40px;
+        height: 40px;
+        background-image: url('/sample-icon.png');
+        background-size: contain;
+        background-repeat: no-repeat;
+        cursor: pointer;
+        transition: transform 0.3s ease-out;
+        filter: drop-shadow(0 0 5px rgba(0,0,0,0.5));
+      }
+      .moving-marker:hover {
+        transform: scale(1.2);
+      }
+      .marker-label {
+        position: absolute;
+        bottom: -20px;
+        left: 50%;
+        transform: translateX(-50%);
+        background-color: rgba(0, 0, 0, 0.7);
+        color: white;
+        padding: 2px 6px;
+        border-radius: 4px;
+        font-size: 12px;
+        white-space: nowrap;
+        pointer-events: none;
+      }
+      .search-container {
+        position: fixed;
+        top: 32px;
+        left: 48px;
+        z-index: 1000;
+        width: 270px;
+        font-family: 'Segoe UI', Arial, sans-serif;
+        transition: transform 0.3s ease;
+      }
+      
+      .search-container.hidden {
+        transform: translateX(-320px);
+      }
+      
+      .search-toggle {
+        position: absolute;
+        right: -50px;
+        top: 0;
+        width: 40px;
+        height: 44px;
+        background: rgba(20,20,30,0.65);
+        border: 2px solid #1976d2;
+        @* border-left: none; *@
+        border-radius: 14px 14px 14px 14px;
+        color: #90caf9;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        box-shadow: 0 2px 8px #1976d211;
+        transition: background 0.18s, box-shadow 0.18s, border-radius 0.18s;
+        margin-left: 8px;
+        z-index: 2;
+      }
+      .search-toggle svg {
+        width: 18px;
+        height: 18px;
+        display: block;
+        fill: #90caf9;
+        transition: transform 0.2s, fill 0.2s;
+      }
+      .search-toggle:hover {
+        background: rgba(25,118,210,0.13);
+        box-shadow: 0 4px 16px #1976d233;
+      }
+      
+      .search-input-container {
+        position: relative;
+        display: flex;
+        align-items: center;
+        height: 44px;
+      }
+      
+      .search-icon {
+        position: absolute;
+        left: 16px;
+        color: #90caf9;
+        font-size: 18px;
+      }
+      
+      .search-input {
+        width: 100%;
+        padding: 12px 16px 12px 45px;
+        border: 2px solid #1976d2;
+        border-radius: 16px;
+        background: rgba(20,20,30,0.85);
+        color: #fff;
+        font-size: 16px;
+        box-shadow: 0 4px 24px rgba(25,118,210,0.18);
+        outline: none;
+        transition: all 0.2s;
+        backdrop-filter: blur(8px);
+        height: 44px;
+      }
+      
+      .search-input:focus {
+        background: rgba(20,20,30,0.95);
+        box-shadow: 0 6px 32px rgba(25,118,210,0.25);
+      }
+      
+      .search-input::placeholder {
+        color: #90caf9;
+        opacity: 1;
+      }
+      
+      .unit-list {
+        margin-top: 6px;
+        max-height: 320px;
+        overflow-y: auto;
+        background: rgba(20,20,30,0.85);
+        border: 2px solid #1976d2;
+        border-radius: 16px;
+        box-shadow: 0 4px 24px rgba(25,118,210,0.18);
+        padding: 6px 0;
+        animation: fadeInDropdown 0.18s;
+        display: none;
+        backdrop-filter: blur(8px);
+      }
+      .unit-list.show {
+        display: block;
+      }
+      @@keyframes fadeInDropdown {
+        from { opacity: 0; transform: translateY(-8px);}
+        to   { opacity: 1; transform: translateY(0);}
+      }
+      .unit-item {
+        padding: 12px 18px;
+        color: #fff;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        font-size: 15px;
+        border: none;
+        background: none;
+        transition: background 0.15s, color 0.15s;
+        border-radius: 8px;
+        margin: 0 6px;
+      }
+      .unit-item:hover, .unit-item.active {
+        background: linear-gradient(90deg, #1976d2 0%, #64b5f6 100%);
+        color: #fff;
+      }
+      .unit-status {
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+        margin-right: 6px;
+        box-shadow: 0 0 4px #0002;
+        border: 2px solid #fff;
+      }
+      /* Custom scrollbar untuk unit list */
+      .unit-list::-webkit-scrollbar {
+        width: 8px;
+      }
+      .unit-list::-webkit-scrollbar-track {
+        background: rgba(255, 255, 255, 0.1);
+        border-radius: 4px;
+      }
+      .unit-list::-webkit-scrollbar-thumb {
+        background: rgba(25, 118, 210, 0.5);
+        border-radius: 4px;
+      }
+      .unit-list::-webkit-scrollbar-thumb:hover {
+        background: rgba(25, 118, 210, 0.7);
+      }
+      #total-unit-info {
+        position: fixed;
+        left: 32px;
+        bottom: 32px;
+        z-index: 1001;
+        background: rgba(20,20,30,0.85);
+        color: #90caf9;
+        border: 2px solid #1976d2;
+        border-radius: 14px;
+        padding: 16px 24px;
+        font-size: 16px;
+        font-family: 'Segoe UI', Arial, sans-serif;
+        box-shadow: 0 4px 24px rgba(25,118,210,0.18);
+        min-width: 120px;
+        text-align: left;
+      }
+
+      .toggle-container {
+        position: fixed;
+        right: 75px;
+        bottom: 32px;
+        z-index: 1001;
+        background: rgba(20,20,30,0.85);
+        color: #90caf9;
+        border: 2px solid #1976d2;
+        border-radius: 14px;
+        padding: 16px 24px;
+        font-size: 12px;
+        font-family: 'Segoe UI', Arial, sans-serif;
+        box-shadow: 0 4px 24px rgba(25,118,210,0.18);
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        transition: all 0.3s ease;
+        backdrop-filter: blur(8px);
+      }
+
+      .toggle-container.hidden {
+        transform: translateX(calc(100% + 8px));
+        opacity: 0;
+      }
+
+      .toggle-container input[type="checkbox"] {
+        width: 12px;
+        height: 12px;
+        cursor: pointer;
+        accent-color: #1976d2;
+      }
+
+      .toggle-container label {
+        cursor: pointer;
+        user-select: none;
+      }
+
+      .toggle-item {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+      }
+
+      .toggle-button {
+        position: fixed;
+        right: 32px;
+        bottom: 32px;
+        z-index: 1002;
+        width: 36px;
+        height: 36px;
+        background: rgba(20,20,30,0.85);
+        border: 2px solid #1976d2;
+        border-radius: 12px;
+        color: #90caf9;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        box-shadow: 0 4px 24px rgba(25,118,210,0.18);
+        transition: all 0.3s ease;
+        backdrop-filter: blur(8px);
+      }
+
+      .toggle-button:hover {
+        background: rgba(25,118,210,0.13);
+        transform: scale(1.05);
+      }
+
+      .toggle-button svg {
+        width: 18px;
+        height: 18px;
+        fill: #90caf9;
+        transition: transform 0.3s ease;
+      }
+
+      .toggle-container.hidden + .toggle-button svg {
+        transform: rotate(180deg);
+      }
+
+      .toggle-container.hidden + .toggle-button {
+        border-radius: 50%;
+      }
+    </style>
+}
+
+
+    <div id="map"></div>
+    
+    <!-- Search Container -->
+    <div class="search-container hidden">
+      <div class="search-input-container">
+        <span class="search-icon">🔍</span>
+        <input type="text" 
+               class="search-input" 
+               placeholder="Search unit..." 
+               id="unit-search">
+      </div>
+      <button class="search-toggle" id="search-toggle" aria-label="Show/hide search">
+        <svg fill="#000000" width="800px" height="800px" viewBox="0 -0.24 28.423 28.423" id="_02_-_Search_Button" data-name="02 - Search Button" xmlns="http://www.w3.org/2000/svg">
+          <path id="Path_215" data-name="Path 215" d="M14.953,2.547A12.643,12.643,0,1,0,27.6,15.19,12.649,12.649,0,0,0,14.953,2.547Zm0,2A10.643,10.643,0,1,1,4.31,15.19,10.648,10.648,0,0,1,14.953,4.547Z" transform="translate(-2.31 -2.547)" fill-rule="evenodd"/>
+          <path id="Path_216" data-name="Path 216" d="M30.441,28.789l-6.276-6.276a1,1,0,1,0-1.414,1.414L29.027,30.2a1,1,0,1,0,1.414-1.414Z" transform="translate(-2.31 -2.547)" fill-rule="evenodd"/>
+        </svg>
+      </button>
+      <div class="unit-list" id="unit-list"></div>
+    </div>
+
+    <div id="popup-info" style="display:none; position:fixed; top:80px; right:40px; z-index:1000; background:rgba(20,20,30,0.85); border:2px solid #1976d2; border-radius:16px; padding:20px 24px 20px 20px; min-width:240px; box-shadow:0 4px 24px rgba(25,118,210,0.18); font-family:sans-serif; color:#fff; backdrop-filter: blur(8px);">
+      <button id="popup-close" style="position:absolute; top:8px; right:8px; background:transparent; border:none; font-size:20px; color:#90caf9; cursor:pointer;">&times;</button>
+      <div style="display:flex; align-items:center; gap:12px; margin-bottom:10px;">
+        @* <img src="/icon.svg" alt="Truck" style="width:32px; height:32px;"> *@
+        <div style="font-weight:bold; font-size:18px; color:#90caf9;">Info Unit</div>
+      </div>
+      <div id="popup-content"></div>
+    </div>
+    @* <button id="clear-cache" style="position:fixed; top:20px; right:20px; z-index:1000; background:#1976d2; color:white; border:none; padding:10px 20px; border-radius:8px; cursor:pointer; font-family:sans-serif;">Clear Cache</button> *@
+    <div id="total-unit-info"></div>
+    <div class="toggle-container hidden">
+      <div class="toggle-item">
+        <input type="checkbox" id="cluster-toggle" checked>
+        <label for="cluster-toggle">Show Clusters</label>
+      </div>
+      <div class="toggle-item">
+        <input type="checkbox" id="geofence-toggle" checked>
+        <label for="geofence-toggle">Show Geofencing</label>
+      </div>
+    </div>
+    <button class="toggle-button" id="toggle-button" aria-label="Toggle settings">
+      <svg viewBox="0 0 24 24" style="transform: rotate(180deg);">
+        <path d="M9.29 6.71a1 1 0 0 1 1.42 0l4 4a1 1 0 0 1 0 1.42l-4 4a1 1 0 1 1-1.42-1.42L12.59 12l-3.3-3.29a1 1 0 0 1 0-1.42z"/>
+      </svg>
+    </button>
+
+
+@section Scripts {
+    <script src="https://unpkg.com/deck.gl@latest/dist.min.js"></script>
+    <script src="https://unpkg.com/maplibre-gl@latest/dist/maplibre-gl.js"></script>
+    <script>
+      const INITIAL_VIEW_STATE = {
+        longitude: 117.5,
+        latitude: 2.2,
+        zoom: 9,
+        pitch: 60,
+        bearing: -20,
+        maxZoom: 20,
+        minZoom: 4,
+        maxBounds: [
+          [117.0, 1.8],
+          [118.0, 2.7]
+        ]
+      };
+      const markers = {};
+      const latestGpsData = {};
+      let popupUnit = null;
+      const markerStates = {};
+      let unitList = [];
+      let ws = null;
+      let messageQueue = [];
+      let isProcessingQueue = false;
+      let lastUpdateTime = {};
+      const UPDATE_THROTTLE = 100; // Minimum time between updates for each unit (ms)
+      const BATCH_SIZE = 10; // Number of messages to process in one batch
+      let connectionQuality = 'good';
+      let latencyHistory = [];
+
+      // Performance monitoring
+      function measureLatency() {
+        const start = performance.now();
+        if (ws && ws.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify({ type: 'ping' }));
+          const latency = performance.now() - start;
+          latencyHistory.push(latency);
+          if (latencyHistory.length > 10) latencyHistory.shift();
+          
+          const avgLatency = latencyHistory.reduce((a, b) => a + b, 0) / latencyHistory.length;
+          if (avgLatency > 500) connectionQuality = 'poor';
+          else if (avgLatency > 200) connectionQuality = 'fair';
+          else connectionQuality = 'good';
+          
+          console.log(`Connection quality: ${connectionQuality}, Latency: ${avgLatency.toFixed(2)}ms`);
+        }
+      }
+
+      // Process message queue
+      async function processMessageQueue() {
+        if (isProcessingQueue || messageQueue.length === 0) return;
+        
+        isProcessingQueue = true;
+        const batch = messageQueue.splice(0, BATCH_SIZE);
+        
+        // Use requestAnimationFrame for smooth updates
+        requestAnimationFrame(() => {
+          batch.forEach(data => {
+            console.log('Processing data from queue:', data); // Debug log
+            if (Array.isArray(data)) {
+              // Handle array of units
+              data.forEach(unit => {
+                if (unit.UnitNo && unit.Lat && unit.Lon) {
+                  // Convert coordinates from integer to decimal
+                  const lat = unit.Lat / 10000000;
+                  const lng = unit.Lon / 10000000;
+                  const now = performance.now();
+
+                  // Skip if update is too soon
+                  if (lastUpdateTime[unit.UnitNo] && now - lastUpdateTime[unit.UnitNo] < UPDATE_THROTTLE) {
+                    return;
+                  }
+
+                  if (isNaN(lat) || isNaN(lng) || lat < -90 || lat > 90 || lng < -180 || lng > 180) {
+                    console.error('Invalid coordinates:', { lat, lng }); // Debug log
+                    return;
+                  }
+
+                  lastUpdateTime[unit.UnitNo] = now;
+
+                  // Add unit to unitList if not exists
+                  if (!unitList.includes(unit.UnitNo)) {
+                    unitList.push(unit.UnitNo);
+                  }
+
+                  // Optimize marker update
+                  updateMarker(
+                    unit.UnitNo,
+                    lat,
+                    lng,
+                    unit.GeoMaxSpeed || 0,
+                    unit.VehicleSpeed || 0,
+                    unit.DeviceId || '',
+                    unit.Status || 'unknown'
+                  );
+
+                  latestGpsData[unit.UnitNo] = {
+                    lat: lat,
+                    lng: lng,
+                    geomaxspeed: unit.GeoMaxSpeed || 0,
+                    vehiclespeed: unit.VehicleSpeed || 0,
+                    deviceid: unit.DeviceId || '',
+                    status: unit.Status || 'unknown'
+                  };
+
+                  if (popupUnit === unit.UnitNo) {
+                    showPopup(lng, lat, unit.UnitNo);
+                  }
+                }
+              });
+            } else {
+              console.error('Invalid data format:', data); // Debug log
+            }
+          });
+
+          // Update UI less frequently
+          if (messageQueue.length === 0) {
+            updateTotalUnitInfo();
+          }
+
+          isProcessingQueue = false;
+          if (messageQueue.length > 0) {
+            processMessageQueue();
+          }
+        });
+      }
+
+      // Initialize WebSocket connection
+      function initializeWebSocket() {
+        ws = new WebSocket('ws://localhost:5000/gpsHub');
+
+        ws.onopen = () => {
+          console.log('WebSocket Connected');
+          // Start latency monitoring
+          setInterval(measureLatency, 5000);
+        };
+
+        ws.onmessage = (event) => {
+          try {
+            const data = JSON.parse(event.data);
+            console.log('Received WebSocket data:', data); // Debug log
+            messageQueue.push(data);
+            processMessageQueue();
+          } catch (error) {
+            console.error('Error parsing WebSocket message:', error);
+          }
+        };
+
+        ws.onclose = () => {
+          console.log('WebSocket Connection Closed');
+          connectionQuality = 'poor';
+          setTimeout(initializeWebSocket, 5000);
+        };
+
+        ws.onerror = (error) => {
+          console.error('WebSocket Error:', error);
+          connectionQuality = 'poor';
+        };
+      }
+
+      // Initialize map
+      const map = new maplibregl.Map({
+        container: 'map',
+        style: {
+          version: 8,
+          glyphs: 'https://fonts.openmaptiles.org/{fontstack}/{range}.pbf',
+          sources: {
+            'google-satellite': {
+              type: 'raster',
+              tiles: [
+                'https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}'
+              ],
+              tileSize: 256
+            }
+          },
+          layers: [{
+            id: 'google-satellite-layer',
+            type: 'raster',
+            source: 'google-satellite',
+            paint: {}
+          }]
+        },
+        center: [INITIAL_VIEW_STATE.longitude, INITIAL_VIEW_STATE.latitude],
+        zoom: INITIAL_VIEW_STATE.zoom,
+        pitch: INITIAL_VIEW_STATE.pitch,
+        bearing: INITIAL_VIEW_STATE.bearing,
+        minZoom: INITIAL_VIEW_STATE.minZoom,
+        maxZoom: INITIAL_VIEW_STATE.maxZoom,
+        maxBounds: INITIAL_VIEW_STATE.maxBounds,
+        interactive: true,
+        dragPan: {
+          inertia: 0.3,
+          linearity: 0.1,
+          sensitivity: 0.5
+        },
+        dragRotate: {
+          inertia: 0.3,
+          sensitivity: 1
+        }
+      });
+
+      // Initialize map features after map loads
+      map.on('load', () => {
+        // Setup search functionality
+        setupSearch();
+        
+        // Add source for moving markers
+        map.addSource('moving-markers', {
+          type: 'geojson',
+          data: {
+            type: 'FeatureCollection',
+            features: []
+          },
+          cluster: true,
+          clusterMaxZoom: 16,
+          clusterRadius: 100
+        });
+
+        // Layer for single point
+        map.addLayer({
+          id: 'moving-points',
+          type: 'circle',
+          source: 'moving-markers',
+          filter: ['!', ['has', 'point_count']],
+          paint: {
+            'circle-opacity': 0
+          }
+        });
+
+        // Add cluster layer
+        map.addLayer({
+          id: 'clusters',
+          type: 'circle',
+          source: 'moving-markers',
+          filter: ['has', 'point_count'],
+          paint: {
+            'circle-color': [
+              'step',
+              ['get', 'point_count'],
+              '#000000', 10, '#43a047', 30, '#e53935'
+            ],
+            'circle-radius': [
+              'step',
+              ['get', 'point_count'],
+              22, 10, 28, 30, 36
+            ],
+            'circle-opacity': 0.85,
+            'circle-stroke-color': '#1976d2',
+            'circle-stroke-width': 4
+          }
+        });
+
+        // Layer for cluster count
+        map.addLayer({
+          id: 'cluster-count',
+          type: 'symbol',
+          source: 'moving-markers',
+          filter: ['has', 'point_count'],
+          layout: {
+            'text-field': ['get', 'point_count'],
+            'text-size': 16,
+            'text-font': ['Open Sans Regular'],
+            'text-ignore-placement': true,
+            'text-allow-overlap': true,
+            'text-anchor': 'center',
+            'text-offset': [0, 0]
+          },
+          paint: {
+            'text-color': '#ffffff'
+          }
+        });
+
+        // Add event listener for cluster click
+        map.on('click', 'clusters', function (e) {
+          var features = map.queryRenderedFeatures(e.point, { layers: ['clusters'] });
+          var cluster = features[0];
+          var count = cluster.properties.point_count;
+          new maplibregl.Popup()
+            .setLngLat(cluster.geometry.coordinates)
+            .setHTML(`<b>${count} unit</b> di area ini`)
+            .addTo(map);
+        });
+
+        // Add event listener for zoom
+        map.on('zoom', updateMarkerVisibility);
+
+        // Add event listener for checkbox clustering
+        const clusterToggle = document.getElementById('cluster-toggle');
+        clusterToggle.addEventListener('change', function() {
+          const isClusteringEnabled = this.checked;
+          
+          // Update source clustering configuration
+          const source = map.getSource('moving-markers');
+          if (source) {
+            source.setData({
+              type: 'FeatureCollection',
+              features: []
+            });
+            source.cluster = isClusteringEnabled;
+          }
+
+          // Toggle cluster layers visibility
+          if (map.getLayer('clusters')) {
+            map.setLayoutProperty('clusters', 'visibility', isClusteringEnabled ? 'visible' : 'none');
+          }
+          if (map.getLayer('cluster-count')) {
+            map.setLayoutProperty('cluster-count', 'visibility', isClusteringEnabled ? 'visible' : 'none');
+          }
+
+          // Update marker visibility
+          updateMarkerVisibility();
+        });
+      });
+
+      // Debounce function
+      function debounce(func, wait) {
+        let timeout;
+        return function executedFunction(...args) {
+          const later = () => {
+            clearTimeout(timeout);
+            func(...args);
+          };
+          clearTimeout(timeout);
+          timeout = setTimeout(later, wait);
+        };
+      }
+
+      // Throttle function
+      function throttle(func, limit) {
+        let inThrottle;
+        return function executedFunction(...args) {
+          if (!inThrottle) {
+            func(...args);
+            inThrottle = true;
+            setTimeout(() => inThrottle = false, limit);
+          }
+        };
+      }
+
+      // Optimized marker visibility update
+      const updateMarkerVisibility = throttle(() => {
+        const features = map.querySourceFeatures('moving-markers', {
+          sourceLayer: undefined,
+          filter: ['!', ['has', 'point_count']]
+        });
+        const visibleUnits = new Set(features.map(f => f.properties.unitno));
+        Object.keys(markers).forEach(unitno => {
+          if (visibleUnits.has(unitno)) {
+            markers[unitno].setOpacity(1);
+          } else {
+            markers[unitno].setOpacity(0);
+          }
+        });
+      }, 100);
+
+      // Optimized search input handler
+      const handleSearchInput = debounce((e) => {
+        updateUnitList(e.target.value);
+      }, 300);
+
+      // Tambahkan fungsi untuk search
+      function setupSearch() {
+        const searchInput = document.getElementById('unit-search');
+        const unitListElement = document.getElementById('unit-list');
+        const searchContainer = document.querySelector('.search-container');
+        const searchToggle = document.getElementById('search-toggle');
+        
+        // Toggle search visibility
+        searchToggle.onclick = () => {
+          searchContainer.classList.toggle('hidden');
+          const chevron = document.getElementById('chevron-toggle');
+          if (chevron) {
+          if (searchContainer.classList.contains('hidden')) {
+            chevron.style.transform = 'rotate(180deg)';
+            chevron.style.fill = '#1976d2';
+          } else {
+            chevron.style.transform = 'rotate(0deg)';
+            chevron.style.fill = '#90caf9';
+          }
+          }
+        };
+        
+        function updateUnitList(filter = '') {
+          const units = Object.keys(latestGpsData).length > 0 ? 
+            Object.keys(latestGpsData) : 
+            unitList;
+            
+          unitListElement.innerHTML = '';
+          
+          const filteredUnits = units.filter(unit => 
+            unit.toLowerCase().includes(filter.toLowerCase())
+          );
+          
+          if (filteredUnits.length > 0) {
+            filteredUnits.forEach(unit => {
+              const div = document.createElement('div');
+              div.className = 'unit-item';
+              
+              // Status indicator
+              const status = document.createElement('span');
+              status.className = 'unit-status';
+              
+              // Cek status dari latestGpsData jika ada
+              const data = latestGpsData[unit];
+              if (data) {
+                if (data.status === 'on' || data.status === true) {
+                  status.style.background = '#43a047';
+                } else if (data.status === 'off' || data.status === false) {
+                  status.style.background = '#e53935';
+                } else {
+                  status.style.background = '#43a047';
+                }
+              } else {
+                status.style.background = '#fbc02d'; // Default kuning jika belum ada data
+              }
+              
+              div.appendChild(status);
+              div.appendChild(document.createTextNode(unit));
+              
+              // Add hover effect
+              div.onmouseenter = () => div.classList.add('active');
+              div.onmouseleave = () => div.classList.remove('active');
+              
+              div.onclick = () => {
+                const marker = markers[unit];
+                if (marker) {
+                  const coord = marker.getLngLat();
+                  map.flyTo({
+                    center: [coord.lng, coord.lat],
+                    zoom: Math.max(map.getZoom(), 18),
+                    duration: 2000
+                  });
+                  popupUnit = unit;
+                  showPopup(coord.lng, coord.lat, unit);
+                  unitListElement.classList.remove('show');
+                  searchInput.value = '';
+                }
+              };
+              
+              unitListElement.appendChild(div);
+            });
+            unitListElement.classList.add('show');
+          } else {
+            // Show "No units found" message
+            const emptyDiv = document.createElement('div');
+            emptyDiv.className = 'unit-item';
+            emptyDiv.style.color = '#90caf9';
+            emptyDiv.textContent = 'No units found';
+            unitListElement.appendChild(emptyDiv);
+            unitListElement.classList.add('show');
+          }
+        }
+        
+        // Event listeners
+        searchInput.addEventListener('focus', () => {
+          updateUnitList('');
+        });
+        
+        searchInput.addEventListener('input', handleSearchInput);
+        
+        // Close dropdown when clicking outside
+        document.addEventListener('click', (e) => {
+          if (!searchInput.contains(e.target) && !unitListElement.contains(e.target)) {
+            unitListElement.classList.remove('show');
+          }
+        });
+      }
+      
+      function showPopup(lng, lat, unitno) {
+        const popup = document.getElementById('popup-info');
+        const content = document.getElementById('popup-content');
+        
+        // Clear any existing update interval
+        if (window.popupUpdateInterval) {
+          clearInterval(window.popupUpdateInterval);
+        }
+        
+        function updatePopupContent() {
+          const gps = latestGpsData[unitno] || { lat, lng };
+          
+          // Using DocumentFragment for better performance
+          const fragment = document.createDocumentFragment();
+          
+          // Create elements instead of using innerHTML
+          const createInfoRow = (label, value) => {
+            const div = document.createElement('div');
+            div.style.marginBottom = '4px';
+            
+            const labelSpan = document.createElement('span');
+            labelSpan.style.color = '#bbb';
+            labelSpan.textContent = label + ': ';
+            
+            const valueSpan = document.createElement('span');
+            valueSpan.style.color = '#90caf9';
+            valueSpan.style.fontWeight = 'bold';
+            valueSpan.textContent = value;
+            
+            div.appendChild(labelSpan);
+            div.appendChild(valueSpan);
+            return div;
+          };
+
+          fragment.appendChild(createInfoRow('Unit', unitno));
+          fragment.appendChild(createInfoRow('GPS Lat', gps.lat));
+          fragment.appendChild(createInfoRow('GPS Long', gps.lng));
+          fragment.appendChild(createInfoRow('GeoMaxSpeed', gps.geomaxspeed !== undefined ? gps.geomaxspeed : '-'));
+          fragment.appendChild(createInfoRow('Vehiclespeed', gps.vehiclespeed !== undefined ? gps.vehiclespeed : '-'));
+
+          // Clear and append new content
+          content.textContent = '';
+          content.appendChild(fragment);
+        }
+
+        // Initial update
+        updatePopupContent();
+        
+        // Set up interval for real-time updates
+        window.popupUpdateInterval = setInterval(updatePopupContent, 1000);
+        
+        // Pastikan popup ditampilkan
+        popup.style.display = 'block';
+        popup.style.opacity = '1';
+        popup.style.visibility = 'visible';
+      }
+
+      // Fungsi untuk tracking marker
+      function startTrackingMarker(unitno) {
+        // Hapus tracking yang ada sebelumnya
+        if (window.trackingInterval) {
+          clearInterval(window.trackingInterval);
+        }
+
+        // Mulai tracking baru
+        window.trackingInterval = setInterval(() => {
+          const marker = markers[unitno];
+          if (marker) {
+            const coord = marker.getLngLat();
+            map.flyTo({
+              center: [coord.lng, coord.lat],
+              zoom: map.getZoom(),
+              duration: 1000,
+              essential: true
+            });
+          }
+        }, 1000); // Update setiap 1 detik
+      }
+
+      // Hentikan tracking ketika popup ditutup
+      document.getElementById('popup-close').onclick = function() {
+        document.getElementById('popup-info').style.display = 'none';
+        popupUnit = null;
+        if (window.trackingInterval) {
+          clearInterval(window.trackingInterval);
+        }
+        // Clear popup update interval when closing
+        if (window.popupUpdateInterval) {
+          clearInterval(window.popupUpdateInterval);
+        }
+      };
+
+      // Tambahkan source untuk marker yang bergerak
+      map.on('load', () => {
+        map.addSource('moving-markers', {
+          type: 'geojson',
+          data: {
+            type: 'FeatureCollection',
+            features: []
+          },
+          cluster: true,
+          clusterMaxZoom: 16,
+          clusterRadius: 100
+        });
+
+        // Layer untuk single point
+        map.addLayer({
+          id: 'moving-points',
+          type: 'circle',
+          source: 'moving-markers',
+          filter: ['!', ['has', 'point_count']],
+          paint: {
+            'circle-opacity': 0 // Atau atur sesuai kebutuhan
+          }
+        });
+
+        // Tambahkan layer untuk cluster (circle)
+        map.addLayer({
+          id: 'clusters',
+          type: 'circle',
+          source: 'moving-markers',
+          filter: ['has', 'point_count'],
+          paint: {
+            'circle-color': [
+              'step',
+              ['get', 'point_count'],
+              '#000000', 10, '#43a047', 30, '#e53935'
+            ],
+            'circle-radius': [
+              'step',
+              ['get', 'point_count'],
+              22, 10, 28, 30, 36
+            ],
+            'circle-opacity': 0.85,
+            'circle-stroke-color': '#1976d2',
+            'circle-stroke-width': 4
+          }
+        });
+
+        // Layer untuk angka jumlah unit di cluster
+        map.addLayer({
+          id: 'cluster-count',
+          type: 'symbol',
+          source: 'moving-markers',
+          filter: ['has', 'point_count'],
+          layout: {
+            'text-field': ['get', 'point_count'],
+            'text-size': 16,
+            'text-font': ['Open Sans Regular'],
+            'text-ignore-placement': true,
+            'text-allow-overlap': true,
+            'text-anchor': 'center',
+            'text-offset': [0, 0]
+          },
+          paint: {
+            'text-color': '#ffffff'
+          }
+        });
+
+        // Tambahkan event listener untuk checkbox clustering
+        const clusterToggle = document.getElementById('cluster-toggle');
+        clusterToggle.addEventListener('change', function() {
+          const isClusteringEnabled = this.checked;
+          
+          // Hapus source dan layer yang ada
+          if (map.getLayer('clusters')) map.removeLayer('clusters');
+          if (map.getLayer('cluster-count')) map.removeLayer('cluster-count');
+          if (map.getLayer('moving-points')) map.removeLayer('moving-points');
+          if (map.getSource('moving-markers')) map.removeSource('moving-markers');
+
+          // Buat source baru dengan konfigurasi clustering yang sesuai
+          map.addSource('moving-markers', {
+            type: 'geojson',
+            data: {
+              type: 'FeatureCollection',
+              features: []
+            },
+            cluster: isClusteringEnabled,
+            clusterMaxZoom: 16,
+            clusterRadius: 100
+          });
+
+          // Tambahkan layer untuk single point
+          map.addLayer({
+            id: 'moving-points',
+            type: 'circle',
+            source: 'moving-markers',
+            filter: ['!', ['has', 'point_count']],
+            paint: {
+              'circle-opacity': 0
+            }
+          });
+
+          // Tambahkan layer cluster jika clustering diaktifkan
+          if (isClusteringEnabled) {
+            map.addLayer({
+              id: 'clusters',
+              type: 'circle',
+              source: 'moving-markers',
+              filter: ['has', 'point_count'],
+              paint: {
+                'circle-color': [
+                  'step',
+                  ['get', 'point_count'],
+                  '#000000', 10, '#43a047', 30, '#e53935'
+                ],
+                'circle-radius': [
+                  'step',
+                  ['get', 'point_count'],
+                  22, 10, 28, 30, 36
+                ],
+                'circle-opacity': 0.85,
+                'circle-stroke-color': '#1976d2',
+                'circle-stroke-width': 4
+              }
+            });
+
+            map.addLayer({
+              id: 'cluster-count',
+              type: 'symbol',
+              source: 'moving-markers',
+              filter: ['has', 'point_count'],
+              layout: {
+                'text-field': ['get', 'point_count'],
+                'text-size': 16,
+                'text-font': ['Open Sans Regular'],
+                'text-ignore-placement': true,
+                'text-allow-overlap': true,
+                'text-anchor': 'center',
+                'text-offset': [0, 0]
+              },
+              paint: {
+                'text-color': '#ffffff'
+              }
+            });
+          }
+
+          // Update marker visibility
+          updateMarkerVisibility();
+        });
+
+        // Tambahkan event listener untuk zoom dengan animasi
+        map.on('zoom', () => {
+          const currentZoom = map.getZoom();
+          // Tampilkan/sembunyikan marker dengan animasi opacity
+          Object.keys(markers).forEach(unitno => {
+            const marker = markers[unitno];
+            marker.getElement().style.transition = 'opacity 0.3s ease';
+            marker.setOpacity(1); // Selalu tampilkan marker
+          });
+
+          // Lepaskan pemilihan unit jika zoom level terlalu kecil
+          if (currentZoom < 15 && popupUnit !== null) {
+            document.getElementById('popup-info').style.display = 'none';
+            popupUnit = null;
+          }
+        });
+
+        map.on('click', 'clusters', function (e) {
+          var features = map.queryRenderedFeatures(e.point, { layers: ['clusters'] });
+          var cluster = features[0];
+          console.log(cluster); // cek di console
+          var count = cluster.properties.point_count;
+          new maplibregl.Popup()
+            .setLngLat(cluster.geometry.coordinates)
+            .setHTML(`<b>${count} unit</b> di area ini`)
+            .addTo(map);
+        });
+
+        map.on('zoom', updateMarkerVisibility);
+      });
+
+      // Memory management for markers
+      const markerCleanup = new WeakMap();
+      
+      function cleanupUnusedMarkers() {
+        const currentUnits = new Set(unitList);
+        Object.keys(markers).forEach(unitno => {
+          if (!currentUnits.has(unitno)) {
+            markers[unitno].remove();
+            delete markers[unitno];
+            delete markerStates[unitno];
+            delete latestGpsData[unitno];
+          }
+        });
+      }
+
+      // Update fetch interval based on number of units
+      function getOptimalFetchInterval() {
+        const unitCount = unitList.length;
+        if (unitCount > 50) return 5000; // 5 seconds for many units
+        if (unitCount > 20) return 3000; // 3 seconds for medium units
+        return 2000; // 2 seconds for few units
+      }
+
+      let currentFetchInterval = 2000;
+
+      function updateTotalUnitInfo() {
+        const total = unitList.length;
+        // Hitung unit aktif dan tidak aktif berdasarkan latestGpsData
+        let aktif = 0;
+        let tidakAktif = 0;
+        unitList.forEach(unit => {
+          const data = latestGpsData[unit];
+          if (data) {
+            if (data.status === 'on' || data.status === true) {
+              aktif++;
+            } else if (data.status === 'off' || data.status === false) {
+              tidakAktif++;
+            }
+          }
+        });
+        document.getElementById('total-unit-info').innerHTML = `Total Unit: ${total}<br>Active: ${aktif}<br>Inactive: ${tidakAktif}`;
+      }
+
+      // Tambahkan event click pada map untuk menutup popup
+      map.on('click', (e) => {
+        // Jika klik bukan pada marker, tutup popup
+        if (!e.originalEvent.target.closest('.marker-container')) {
+          document.getElementById('popup-info').style.display = 'none';
+          popupUnit = null;
+        }
+      });
+
+      // Tambahkan event listener untuk checkbox geofencing
+      const geofenceToggle = document.getElementById('geofence-toggle');
+      geofenceToggle.addEventListener('change', function() {
+        const isGeofenceEnabled = this.checked;
+        
+        // Toggle visibility layer geofence
+        if (map.getLayer('geojson-layer')) {
+          map.setLayoutProperty('geojson-layer', 'visibility', isGeofenceEnabled ? 'visible' : 'none');
+        }
+      });
+
+      // Tambahkan event listener untuk toggle button
+      const toggleButton = document.getElementById('toggle-button');
+      const toggleContainer = document.querySelector('.toggle-container');
+      
+      toggleButton.addEventListener('click', function() {
+        toggleContainer.classList.toggle('hidden');
+      });
+
+    </script>
+}
