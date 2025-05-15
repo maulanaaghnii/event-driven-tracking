@@ -912,7 +912,15 @@
         if (!e.originalEvent.target.closest('.marker-container')) {
           document.getElementById('popup-info').style.display = 'none';
           popupUnit = null;
+          if (window.trackingInterval) {
+          clearInterval(window.trackingInterval);
+          }
+          // Clear popup update interval when closing
+          if (window.popupUpdateInterval) {
+            clearInterval(window.popupUpdateInterval);
+          }
         }
+        
       });
 
       // Tambahkan event listener untuk checkbox geofencing
@@ -1088,9 +1096,12 @@
           id: 'moving-points',
           type: 'circle',
           source: 'moving-markers',
-          filter: ['!', ['has', 'point_count']],
+          filter: ['all',
+            ['!', ['has', 'point_count']],
+            ['>=', ['zoom'], 16] // Hanya tampilkan unit ketika zoom level >= 16
+          ],
           paint: {
-            'circle-opacity': 0 // Atau atur sesuai kebutuhan
+            'circle-opacity': 0
           }
         });
 
@@ -1167,7 +1178,10 @@
             id: 'moving-points',
             type: 'circle',
             source: 'moving-markers',
-            filter: ['!', ['has', 'point_count']],
+            filter: ['all',
+              ['!', ['has', 'point_count']],
+              ['>=', ['zoom'], 16] // Hanya tampilkan unit ketika zoom level >= 16
+            ],
             paint: {
               'circle-opacity': 0
             }
@@ -1225,7 +1239,13 @@
 
         // Event handler untuk klik pada unit individual
         map.on('click', 'moving-points', function (e) {
-          var features = map.queryRenderedFeatures(e.point, { layers: ['moving-points'] });
+          // Cek zoom level
+          if (map.getZoom() < 16) return;
+          
+          var features = map.queryRenderedFeatures(e.point, { 
+            layers: ['moving-points']
+          });
+          
           if (!features.length) return;
           
           var feature = features[0];
@@ -1243,19 +1263,46 @@
           });
         });
 
-        // Tambahkan cursor pointer saat hover di cluster dan angka cluster
+        // Tambahkan cursor pointer saat hover di unit yang terlihat
+        map.on('mouseenter', 'moving-points', (e) => {
+          if (map.getZoom() >= 16) {
+            map.getCanvas().style.cursor = 'pointer';
+          }
+        });
+        
+        map.on('mouseleave', 'moving-points', () => {
+          map.getCanvas().style.cursor = '';
+        });
+
+        // Event handler untuk klik pada cluster
+        map.on('click', ['clusters', 'cluster-count'], async function (e) {
+          var features = map.queryRenderedFeatures(e.point, {
+            layers: ['clusters', 'cluster-count']
+          });
+          
+          if (!features.length) return;
+          
+          var cluster = features[0];
+          var clusterId = cluster.properties.cluster_id;
+          
+          try {
+            const zoom = await map.getSource('moving-markers').getClusterExpansionZoom(clusterId);
+            
+            map.easeTo({
+              center: cluster.geometry.coordinates,
+              zoom: zoom,
+              duration: 1000
+            });
+          } catch (error) {
+            console.error('Error expanding cluster:', error);
+          }
+        });
+
+        // Tambahkan cursor pointer saat hover di cluster
         map.on('mouseenter', ['clusters', 'cluster-count'], () => {
           map.getCanvas().style.cursor = 'pointer';
         });
         map.on('mouseleave', ['clusters', 'cluster-count'], () => {
-          map.getCanvas().style.cursor = '';
-        });
-
-        // Tambahkan cursor pointer saat hover di unit
-        map.on('mouseenter', 'moving-points', () => {
-          map.getCanvas().style.cursor = 'pointer';
-        });
-        map.on('mouseleave', 'moving-points', () => {
           map.getCanvas().style.cursor = '';
         });
       });
