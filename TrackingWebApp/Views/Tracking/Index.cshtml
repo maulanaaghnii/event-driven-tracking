@@ -17,7 +17,7 @@
       .moving-marker {
         width: 40px;
         height: 40px;
-        background-image: url('/sample-icon.png');
+        background-image: url('/icon-normal.png');
         background-size: contain;
         background-repeat: no-repeat;
         cursor: pointer;
@@ -597,11 +597,11 @@
         markerElement.className = 'moving-marker';
         
         // Atur icon sesuai vehiclespeed
-        let iconUrl = '/icon-normal.svg';
+        let iconUrl = '/icon-normal.png';
         if (vehiclespeed < 5) {
-          iconUrl = '/icon-idle.svg';
+          iconUrl = '/icon-idle.png';
         } else if (vehiclespeed > 25) {
-          iconUrl = '/icon-overspeed.svg';
+          iconUrl = '/icon-overspeed.png';
         }
         markerElement.style.backgroundImage = `url('${iconUrl}')`;
         
@@ -752,11 +752,11 @@
           
           // Update icon jika vehiclespeed berubah
           const markerContainer = markers[unitno].getElement();
-          let iconUrl = '/icon-normal.svg';
+          let iconUrl = '/icon-normal.png';
           if (vehiclespeed < 5) {
-            iconUrl = '/icon-idle.svg';
+            iconUrl = '/icon-idle.png';
           } else if (vehiclespeed > 25) {
-            iconUrl = '/icon-overspeed.svg';
+            iconUrl = '/icon-overspeed.png';
           }
           markerContainer.querySelector('.moving-marker').style.backgroundImage = `url('${iconUrl}')`;
         }
@@ -1180,11 +1180,11 @@
         map.on('zoom', () => {
           const currentZoom = map.getZoom();
           // Tampilkan/sembunyikan marker dengan animasi opacity
-          Object.keys(markers).forEach(unitno => {
+          @* Object.keys(markers).forEach(unitno => {
             const marker = markers[unitno];
             marker.getElement().style.transition = 'opacity 0.3s ease';
             marker.setOpacity(1); // Selalu tampilkan marker
-          });
+          }); *@
 
           // Lepaskan pemilihan unit jika zoom level terlalu kecil
           if (currentZoom < 15 && popupUnit !== null) {
